@@ -1,0 +1,38 @@
+# Face Mask lightweight variant A: MobileNetV2-style backbone with YOLOv8 neck/head.
+
+nc: 2
+depth_multiple: 1.0
+width_multiple: 1.0
+
+backbone:
+  - [-1, 1, Conv, [16, 3, 2]] # 0-P1/2
+  - [-1, 1, MobileNetV2Block, [16, 3, 1, 16]]
+  - [-1, 1, MobileNetV2Block, [24, 3, 2, 64]] # 2-P2/4
+  - [-1, 1, MobileNetV2Block, [24, 3, 1, 72]]
+  - [-1, 1, MobileNetV2Block, [32, 3, 2, 96]] # 4-P3/8
+  - [-1, 1, MobileNetV2Block, [32, 3, 1, 96]]
+  - [-1, 1, MobileNetV2Block, [64, 3, 2, 160]] # 6-P4/16
+  - [-1, 1, MobileNetV2Block, [64, 3, 1, 160]]
+  - [-1, 1, MobileNetV2Block, [96, 3, 1, 192]]
+  - [-1, 1, MobileNetV2Block, [160, 3, 2, 384]] # 9-P5/32
+  - [-1, 1, MobileNetV2Block, [160, 3, 1, 384]]
+  - [-1, 1, SPPF, [160, 5]]
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 8], 1, Concat, [1]]
+  - [-1, 2, C2f, [96]]
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 5], 1, Concat, [1]]
+  - [-1, 2, C2f, [64]]
+
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [[-1, 14], 1, Concat, [1]]
+  - [-1, 2, C2f, [96]]
+
+  - [-1, 1, Conv, [96, 3, 2]]
+  - [[-1, 11], 1, Concat, [1]]
+  - [-1, 2, C2f, [160]]
+
+  - [[17, 20, 23], 1, Detect, [nc]]

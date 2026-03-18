@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+
+# Training outputs
+runs/
+
+# Dataset
+datasets/*
+!datasets/VOC_subset/
+!datasets/VOC_subset/**
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log

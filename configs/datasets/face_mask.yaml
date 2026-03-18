@@ -1,0 +1,8 @@
+path: datasets/face_mask
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: with_mask
+  1: without_mask
