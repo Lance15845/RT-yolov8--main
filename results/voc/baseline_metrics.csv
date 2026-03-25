@@ -1,0 +1,2 @@
+dataset,model_key,weights_path,map50,map5095,params_m,gflops
+voc,baseline,D:\DA\Sem2\RT\RT-yolov8--main\runs\voc\baseline\weights\best.pt,0.52106,0.331728,3.009548,8.105626

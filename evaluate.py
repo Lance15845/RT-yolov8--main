@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 
 from project_config import (
     COMPARISON_FIELDS,
@@ -13,8 +14,10 @@ from project_config import (
     comparison_csv_path,
     dataset_yaml_path,
     ensure_workspace_dirs,
+    experiment_dir,
     find_experiment_weights,
     metrics_csv_path,
+    pick_sample_image,
     read_csv_rows,
     resolve_device,
     write_csv_rows,
@@ -22,14 +25,14 @@ from project_config import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Evaluate one or more trained experiment variants.")
+    parser = argparse.ArgumentParser(description="Evaluate one or more trained VOC experiment variants.")
     parser.add_argument("--dataset", required=True, choices=DATASET_KEYS)
     parser.add_argument("--model", choices=MODEL_KEYS, help="Evaluate a single model key. Default evaluates all.")
     parser.add_argument("--weights", help="Optional explicit weights path for single-model evaluation.")
     parser.add_argument("--split", default="val", choices=("train", "val", "test"))
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--device", help="Explicit device string. Defaults to mps when available, otherwise cpu.")
+    parser.add_argument("--device", help="CUDA-only. Omit or use cuda:0.")
     return parser
 
 
@@ -37,8 +40,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     ensure_workspace_dirs()
     bootstrap_ultralytics_path()
+    ensure_amp_check_asset()
 
     from ultralytics import YOLO
+    from ultralytics.utils.torch_utils import get_flops, get_num_params
 
     data_path = dataset_yaml_path(args.dataset)
     if not data_path.exists():
@@ -58,15 +63,21 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         model = YOLO(str(weights_path))
+        val_dir = experiment_dir(args.dataset, model_key) / "val"
+        val_dir.mkdir(parents=True, exist_ok=True)
         metrics = model.val(
             data=str(data_path),
             split=args.split,
             imgsz=args.imgsz,
             batch=args.batch,
             device=resolve_device(args.device),
+            project=str(val_dir.parent),
+            name=val_dir.name,
+            exist_ok=True,
             verbose=False,
         )
-        _, params, _, flops = model.info(verbose=False)
+        params = get_num_params(model.model)
+        flops = get_flops(model.model, imgsz=args.imgsz)
         row = {
             "dataset": args.dataset,
             "model_key": model_key,
@@ -82,16 +93,26 @@ def main(argv: list[str] | None = None) -> int:
     if not metric_rows:
         raise RuntimeError(f"No models could be evaluated for dataset '{args.dataset}'.")
 
-    if args.dataset == "face_mask":
-        all_metric_rows = []
-        for model_key in MODEL_KEYS:
-            all_metric_rows.extend(read_csv_rows(metrics_csv_path(args.dataset, model_key)))
-        benchmark_rows = read_csv_rows(benchmark_csv_path(args.dataset))
-        comparison_rows = build_comparison_rows(all_metric_rows, benchmark_rows)
-        write_csv_rows(comparison_csv_path(args.dataset), COMPARISON_FIELDS, comparison_rows)
+    all_metric_rows = []
+    for model_key in MODEL_KEYS:
+        all_metric_rows.extend(read_csv_rows(metrics_csv_path(args.dataset, model_key)))
+    benchmark_rows = read_csv_rows(benchmark_csv_path(args.dataset))
+    comparison_rows = build_comparison_rows(all_metric_rows, benchmark_rows)
+    write_csv_rows(comparison_csv_path(args.dataset), COMPARISON_FIELDS, comparison_rows)
 
     print(f"Evaluation finished for dataset={args.dataset} models={','.join(row['model_key'] for row in metric_rows)}")
     return 0
+
+
+def ensure_amp_check_asset() -> None:
+    from ultralytics.utils import ASSETS
+
+    target = ASSETS / "bus.jpg"
+    if target.exists():
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(pick_sample_image("voc"), target)
 
 
 if __name__ == "__main__":

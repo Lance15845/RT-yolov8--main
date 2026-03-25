@@ -1,0 +1,2 @@
+dataset,model_key,weights_path,map50,map5095,params_m,gflops
+voc,mobilenetv2,D:\DA\Sem2\RT\RT-yolov8--main\runs\voc\mobilenetv2\weights\best.pt,0.450831,0.279634,1.739764,6.433331

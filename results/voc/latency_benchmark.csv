@@ -1,0 +1,4 @@
+dataset,model_key,weights_path,device,source_image,latency_ms,fps
+voc,baseline,D:\DA\Sem2\RT\RT-yolov8--main\runs\voc\baseline\weights\best.pt,cuda:0,D:\DA\Sem2\RT\RT-yolov8--main\datasets\VOC_subset\images\val\000002.jpg,8.649379,115.615237
+voc,mobilenetv2,D:\DA\Sem2\RT\RT-yolov8--main\runs\voc\mobilenetv2\weights\best.pt,cuda:0,D:\DA\Sem2\RT\RT-yolov8--main\datasets\VOC_subset\images\val\000002.jpg,8.693633,115.02671
+voc,pcg_ghost,D:\DA\Sem2\RT\RT-yolov8--main\runs\voc\pcg_ghost\weights\best.pt,cuda:0,D:\DA\Sem2\RT\RT-yolov8--main\datasets\VOC_subset\images\val\000002.jpg,10.465527,95.551805

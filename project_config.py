@@ -16,17 +16,11 @@ DATASETS_DIR = ROOT / "datasets"
 RESULTS_DIR = ROOT / "results"
 RUNS_DIR = ROOT / "runs"
 
-DEFAULT_FACE_MASK_DATASET_SLUG = "omkargurav/face-mask-dataset"
-DATASET_KEYS = ("face_mask", "voc_smoke")
+DATASET_KEYS = ("voc",)
 MODEL_KEYS = ("baseline", "mobilenetv2", "pcg_ghost")
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".webp"}
 
-FACE_MASK_NAMES = {
-    0: "with_mask",
-    1: "without_mask",
-}
-
-VOC_SMOKE_NAMES = {
+VOC_NAMES = {
     0: "aeroplane",
     1: "bicycle",
     2: "bird",
@@ -50,25 +44,26 @@ VOC_SMOKE_NAMES = {
 }
 
 DATASET_CONFIGS = {
-    "face_mask": DATASET_CONFIG_DIR / "face_mask.yaml",
-    "voc_smoke": DATASET_CONFIG_DIR / "voc_smoke.yaml",
+    "voc": DATASET_CONFIG_DIR / "voc.yaml",
 }
 
 MODEL_CONFIGS = {
-    "baseline": ULTRALYTICS_ROOT / "ultralytics" / "cfg" / "models" / "custom" / "yolov8n_mask_baseline.yaml",
-    "mobilenetv2": ULTRALYTICS_ROOT / "ultralytics" / "cfg" / "models" / "custom" / "yolov8n_mobilenetv2_mask.yaml",
-    "pcg_ghost": ULTRALYTICS_ROOT / "ultralytics" / "cfg" / "models" / "custom" / "yolov8n_pcg_ghost_mask.yaml",
+    "baseline": ULTRALYTICS_ROOT / "ultralytics" / "cfg" / "models" / "custom" / "yolov8n_voc_baseline.yaml",
+    "mobilenetv2": ULTRALYTICS_ROOT / "ultralytics" / "cfg" / "models" / "custom" / "yolov8n_voc_mobilenetv2.yaml",
+    "pcg_ghost": ULTRALYTICS_ROOT / "ultralytics" / "cfg" / "models" / "custom" / "yolov8n_voc_pcg_ghost.yaml",
 }
 
 DEFAULT_TRAIN_ARGS = {
     "imgsz": 640,
-    "batch": 16,
+    "batch": 24,
     "epochs": 100,
     "optimizer": "auto",
     "lr0": 0.01,
     "seed": 42,
-    "workers": 0,
+    "workers": 2,
     "patience": 20,
+    "cache": "disk",
+    "amp": True,
 }
 
 METRIC_FIELDS = ["dataset", "model_key", "weights_path", "map50", "map5095", "params_m", "gflops"]
@@ -97,17 +92,13 @@ def bootstrap_ultralytics_path() -> None:
 def ensure_workspace_dirs() -> None:
     for path in (CONFIGS_ROOT, DATASET_CONFIG_DIR, DATASETS_DIR, RESULTS_DIR, RUNS_DIR):
         path.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "figures").mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "voc_smoke").mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "voc_smoke" / "figures").mkdir(parents=True, exist_ok=True)
+    figures_dir_for("voc")
 
 
 def dataset_root(dataset_key: str) -> Path:
-    if dataset_key == "face_mask":
-        return DATASETS_DIR / "face_mask"
-    if dataset_key == "voc_smoke":
-        return DATASETS_DIR / "VOC_subset"
-    raise KeyError(f"Unknown dataset key: {dataset_key}")
+    if dataset_key != "voc":
+        raise KeyError(f"Unknown dataset key: {dataset_key}")
+    return DATASETS_DIR / "VOC_subset"
 
 
 def dataset_yaml_path(dataset_key: str) -> Path:
@@ -119,11 +110,9 @@ def model_yaml_path(model_key: str) -> Path:
 
 
 def results_dir_for(dataset_key: str) -> Path:
-    if dataset_key == "face_mask":
-        return RESULTS_DIR
-    subdir = RESULTS_DIR / dataset_key
-    subdir.mkdir(parents=True, exist_ok=True)
-    return subdir
+    path = RESULTS_DIR / dataset_key
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def figures_dir_for(dataset_key: str) -> Path:
@@ -173,26 +162,34 @@ def find_experiment_weights(dataset_key: str, model_key: str, override: Optional
 
 
 def resolve_device(requested: Optional[str] = None) -> str:
-    if requested:
-        return requested
-
     try:
         import torch
-    except ImportError:
-        return "cpu"
+    except ImportError as exc:
+        raise RuntimeError("PyTorch is required to resolve the CUDA device.") from exc
 
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+    if not torch.cuda.is_available():
+        raise RuntimeError("This project is CUDA-only. No CUDA-capable GPU is available to PyTorch.")
+
+    if requested is None:
+        return "cuda:0"
+
+    normalized = str(requested).strip().lower()
+    if normalized not in {"cuda", "cuda:0", "0"}:
+        raise ValueError("This project is CUDA-only. Use --device cuda:0.")
+    return "cuda:0"
 
 
 def iter_image_files(directory: Path) -> list[Path]:
     if not directory.exists():
         return []
-    return sorted(path for path in directory.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
+    return sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file() and not path.name.startswith("._") and path.suffix.lower() in IMAGE_SUFFIXES
+    )
 
 
-def pick_sample_image(dataset_key: str, split_order: Iterable[str] = ("val", "test", "train")) -> Path:
+def pick_sample_image(dataset_key: str, split_order: Iterable[str] = ("val", "train")) -> Path:
     root = dataset_root(dataset_key) / "images"
     for split in split_order:
         candidates = iter_image_files(root / split)
@@ -229,23 +226,29 @@ def write_csv_rows(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
 
 
 def build_comparison_rows(metric_rows: list[dict], benchmark_rows: list[dict]) -> list[dict]:
+    metric_by_model = {row["model_key"]: row for row in metric_rows}
     benchmark_by_model = {row["model_key"]: row for row in benchmark_rows}
-    baseline_row = next((row for row in metric_rows if row["model_key"] == "baseline"), None)
+    baseline_row = metric_by_model.get("baseline")
     baseline_map50 = _to_float(baseline_row["map50"]) if baseline_row else None
 
     rows = []
-    for metric_row in metric_rows:
-        bench_row = benchmark_by_model.get(metric_row["model_key"], {})
+    for model_key in MODEL_KEYS:
+        metric_row = metric_by_model.get(model_key)
+        if not metric_row:
+            continue
+
+        bench_row = benchmark_by_model.get(model_key, {})
         current_map50 = _to_float(metric_row["map50"])
         delta_pct = ""
         meets = ""
         if baseline_map50 and current_map50 is not None:
             delta_pct = round(((baseline_map50 - current_map50) / baseline_map50) * 100.0, 4)
             meets = str(delta_pct < 3.0)
+
         rows.append(
             {
                 "dataset": metric_row["dataset"],
-                "model_key": metric_row["model_key"],
+                "model_key": model_key,
                 "weights_path": metric_row["weights_path"],
                 "map50": metric_row["map50"],
                 "map5095": metric_row["map5095"],
@@ -260,7 +263,7 @@ def build_comparison_rows(metric_rows: list[dict], benchmark_rows: list[dict]) -
     return rows
 
 
-def _to_float(value: object) -> Optional[float]:
+def _to_float(value: object) -> float | None:
     if value in ("", None):
         return None
     return float(value)

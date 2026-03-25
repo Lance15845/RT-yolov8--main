@@ -26,14 +26,14 @@ from project_config import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Benchmark inference latency for trained experiment variants.")
-    parser.add_argument("--dataset", default="face_mask", choices=DATASET_KEYS)
+    parser = argparse.ArgumentParser(description="Benchmark inference latency for trained VOC experiment variants.")
+    parser.add_argument("--dataset", default="voc", choices=DATASET_KEYS)
     parser.add_argument("--model", choices=MODEL_KEYS, help="Benchmark a single model key. Default benchmarks all.")
     parser.add_argument("--weights", help="Optional explicit weights path for single-model benchmarking.")
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--warmup", type=int, default=30)
     parser.add_argument("--iters", type=int, default=100)
-    parser.add_argument("--device", help="Explicit device string. Defaults to mps when available, otherwise cpu.")
+    parser.add_argument("--device", help="CUDA-only. Omit or use cuda:0.")
     parser.add_argument("--source", help="Optional explicit source image. Defaults to the first validation image.")
     return parser
 
@@ -94,25 +94,19 @@ def main(argv: list[str] | None = None) -> int:
     merged_rows = [existing_rows[key] for key in MODEL_KEYS if key in existing_rows]
     write_csv_rows(benchmark_csv_path(args.dataset), BENCHMARK_FIELDS, merged_rows)
 
-    if args.dataset == "face_mask":
-        metric_rows = []
-        for model_key in MODEL_KEYS:
-            metric_rows.extend(read_csv_rows(metrics_csv_path(args.dataset, model_key)))
-        if metric_rows:
-            comparison_rows = build_comparison_rows(metric_rows, merged_rows)
-            write_csv_rows(comparison_csv_path(args.dataset), COMPARISON_FIELDS, comparison_rows)
+    metric_rows = []
+    for model_key in MODEL_KEYS:
+        metric_rows.extend(read_csv_rows(metrics_csv_path(args.dataset, model_key)))
+    if metric_rows:
+        comparison_rows = build_comparison_rows(metric_rows, merged_rows)
+        write_csv_rows(comparison_csv_path(args.dataset), COMPARISON_FIELDS, comparison_rows)
 
     print(f"Benchmark finished for dataset={args.dataset} models={','.join(row['model_key'] for row in rows)}")
     return 0
 
 
 def synchronize_device(device: str) -> None:
-    if device == "mps":
-        import torch
-
-        if getattr(torch, "mps", None):
-            torch.mps.synchronize()
-    elif device.startswith("cuda"):
+    if device.startswith("cuda"):
         import torch
 
         torch.cuda.synchronize()

@@ -15,9 +15,7 @@ COMMAND_MODULES = {
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Unified entrypoint for the Face Mask YOLOv8-Light experiment project."
-    )
+    parser = argparse.ArgumentParser(description="Unified entrypoint for the VOC YOLOv8-Light experiment project.")
     parser.add_argument("command", choices=COMMAND_MODULES.keys(), help="Command to run.")
     parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments forwarded to the command module.")
     return parser

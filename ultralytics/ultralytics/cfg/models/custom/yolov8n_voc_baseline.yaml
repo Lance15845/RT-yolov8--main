@@ -1,6 +1,6 @@
-# Face Mask baseline model: YOLOv8n detect head with 2 classes.
+# VOC baseline model: native YOLOv8n detection structure with 20 classes.
 
-nc: 2
+nc: 20
 depth_multiple: 0.33
 width_multiple: 0.25
 

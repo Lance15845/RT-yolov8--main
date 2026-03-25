@@ -1,0 +1,39 @@
+# VOC lightweight variant B: Pyramidal Coordinate-GhostNet.
+# Backbone channels follow a constrained deep-channel pyramid: 48 -> 96 -> 80 -> 64.
+
+nc: 20
+depth_multiple: 1.0
+width_multiple: 1.0
+
+backbone:
+  - [-1, 1, Conv, [32, 3, 2]] # 0-P1/2
+  - [-1, 1, GhostConv, [48, 3, 2]] # 1-P2/4
+  - [-1, 1, C3Ghost, [48, True]]
+  - [-1, 1, GhostConv, [96, 3, 2]] # 3-P3/8
+  - [-1, 2, C3Ghost, [96, True]]
+  - [-1, 1, GhostConv, [80, 3, 2]] # 5-P4/16
+  - [-1, 2, C3Ghost, [80, True]]
+  - [-1, 1, CoordinateAttention, [80, 32]]
+  - [-1, 1, GhostConv, [64, 3, 2]] # 8-P5/32
+  - [-1, 2, C3Ghost, [64, True]]
+  - [-1, 1, CoordinateAttention, [64, 32]]
+  - [-1, 1, SPPF, [64, 5]]
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 7], 1, Concat, [1]]
+  - [-1, 2, C3Ghost, [80]]
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 4], 1, Concat, [1]]
+  - [-1, 2, C3Ghost, [96]]
+
+  - [-1, 1, GhostConv, [80, 3, 2]]
+  - [[-1, 14], 1, Concat, [1]]
+  - [-1, 2, C3Ghost, [80]]
+
+  - [-1, 1, GhostConv, [64, 3, 2]]
+  - [[-1, 11], 1, Concat, [1]]
+  - [-1, 2, C3Ghost, [64]]
+
+  - [[17, 20, 23], 1, Detect, [nc]]

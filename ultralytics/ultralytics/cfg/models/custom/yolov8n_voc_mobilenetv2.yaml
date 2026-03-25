@@ -1,6 +1,6 @@
-# Face Mask lightweight variant A: MobileNetV2-style backbone with YOLOv8 neck/head.
+# VOC lightweight variant A: MobileNetV2 backbone with YOLOv8 neck/head.
 
-nc: 2
+nc: 20
 depth_multiple: 1.0
 width_multiple: 1.0
 

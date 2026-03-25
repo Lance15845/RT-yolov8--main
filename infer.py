@@ -10,16 +10,17 @@ from project_config import (
     figures_dir_for,
     find_experiment_weights,
     pick_sample_image,
+    resolve_device,
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate qualitative prediction figures for trained variants.")
-    parser.add_argument("--dataset", default="face_mask", choices=DATASET_KEYS)
+    parser = argparse.ArgumentParser(description="Generate qualitative VOC prediction figures for trained variants.")
+    parser.add_argument("--dataset", default="voc", choices=DATASET_KEYS)
     parser.add_argument("--model", choices=MODEL_KEYS, help="Run inference for a single model key. Default runs all.")
     parser.add_argument("--weights", help="Optional explicit weights path for single-model inference.")
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--device", help="Device string forwarded to Ultralytics predict().")
+    parser.add_argument("--device", help="CUDA-only. Omit or use cuda:0.")
     parser.add_argument("--source", help="Optional explicit source image. Defaults to the first validation image.")
     return parser
 
@@ -32,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     from ultralytics import YOLO
 
     source = args.source or str(pick_sample_image(args.dataset))
+    device = resolve_device(args.device)
     selected_models = [args.model] if args.model else list(MODEL_KEYS)
     output_dir = figures_dir_for(args.dataset)
 
@@ -44,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         model = YOLO(str(weights_path))
-        prediction = model.predict(source=source, imgsz=args.imgsz, device=args.device, verbose=False)[0]
+        prediction = model.predict(source=source, imgsz=args.imgsz, device=device, verbose=False)[0]
         output_path = output_dir / f"{model_key}_predictions.png"
         prediction.save(filename=str(output_path))
         print(f"Saved prediction figure for model={model_key} to {output_path}")

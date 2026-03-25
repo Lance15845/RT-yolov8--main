@@ -1,0 +1,2 @@
+dataset,model_key,weights_path,map50,map5095,params_m,gflops
+voc,pcg_ghost,D:\DA\Sem2\RT\RT-yolov8--main\runs\voc\pcg_ghost\weights\best.pt,0.368099,0.217232,1.02887,6.574118

@@ -15,6 +15,9 @@ env/
 
 # Training outputs
 runs/
+original_repo_compare/
+._*
+*.npy
 
 # Dataset
 datasets/*

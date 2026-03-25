@@ -1,4 +1,4 @@
-path: /Users/lance/Desktop/Data analysis/Sem2/RT/RT-yolov8--main/datasets/VOC_subset
+path: datasets/VOC_subset
 train: images/train
 val: images/val
 names:
